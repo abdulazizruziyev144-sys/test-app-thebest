@@ -1,0 +1,11 @@
+{
+  "name": "Remix Remix Remix THE BEST FAST FOOD — Bukhara",
+  "description": "THE BEST FAST FOOD — flame-seared burgers, hand-rolled lavash, and golden fries in Bukhara, Uzbekistan. Order delivery, pickup, or reserve a table.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

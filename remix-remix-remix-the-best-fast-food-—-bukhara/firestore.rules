@@ -1,0 +1,196 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'abdulazizruziyev144@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidTotals(totals) {
+      return totals is map
+        && totals.keys().hasAll(['subtotal', 'discount', 'delivery', 'total'])
+        && totals.keys().hasOnly(['subtotal', 'discount', 'delivery', 'total'])
+        && totals.subtotal is number && totals.subtotal >= 0 && totals.subtotal <= 1000000000
+        && totals.discount is number && totals.discount >= 0 && totals.discount <= 1000000000
+        && totals.delivery is number && totals.delivery >= 0 && totals.delivery <= 1000000000
+        && totals.total is number && totals.total >= 0 && totals.total <= 1000000000;
+    }
+
+    function isValidCustomer(customer) {
+      return customer is map
+        && customer.keys().hasAll(['name', 'phone', 'address', 'date', 'time', 'guests', 'table', 'note'])
+        && customer.keys().hasOnly(['name', 'phone', 'address', 'date', 'time', 'guests', 'table', 'note'])
+        && customer.name is string && customer.name.size() >= 2 && customer.name.size() <= 80
+        && customer.phone is string && customer.phone.size() >= 9 && customer.phone.size() <= 24
+        && customer.address is string && customer.address.size() <= 240
+        && customer.date is string && customer.date.size() <= 20
+        && customer.time is string && customer.time.size() <= 10
+        && customer.guests is string && customer.guests.size() <= 10
+        && customer.table is string && customer.table.size() <= 20
+        && customer.note is string && customer.note.size() <= 240;
+    }
+
+    function isValidRewards(rewards) {
+      return rewards is map
+        && rewards.keys().hasAll(['phone', 'pointsRedeemed', 'pointsEarned'])
+        && rewards.keys().hasOnly(['phone', 'pointsRedeemed', 'pointsEarned'])
+        && rewards.phone is string && rewards.phone.size() <= 24
+        && rewards.pointsRedeemed is int && rewards.pointsRedeemed >= 0 && rewards.pointsRedeemed <= 10000000
+        && rewards.pointsEarned is int && rewards.pointsEarned >= 0 && rewards.pointsEarned <= 10000000;
+    }
+
+    function isValidDeliveryCoords(coords) {
+      return coords is map
+        && coords.keys().hasAll(['lat', 'lng'])
+        && coords.keys().hasOnly(['lat', 'lng', 'distanceKm', 'etaMinutes'])
+        && coords.lat is number && coords.lat >= -90 && coords.lat <= 90
+        && coords.lng is number && coords.lng >= -180 && coords.lng <= 180
+        && (!('distanceKm' in coords) || (coords.distanceKm is number && coords.distanceKm >= 0 && coords.distanceKm <= 200))
+        && (!('etaMinutes' in coords) || (coords.etaMinutes is number && coords.etaMinutes >= 0 && coords.etaMinutes <= 300));
+    }
+
+    function isValidOrderItem(item) {
+      return item is map
+        && item.keys().hasAll(['id', 'name', 'qty', 'unit', 'options'])
+        && item.keys().hasOnly(['id', 'name', 'qty', 'unit', 'options', 'bundle'])
+        && item.id is string && item.id.size() >= 1 && item.id.size() <= 40
+        && item.name is string && item.name.size() >= 1 && item.name.size() <= 120
+        && item.qty is int && item.qty >= 1 && item.qty <= 99
+        && item.unit is number && item.unit >= 0 && item.unit <= 1000000000
+        && item.options is map && item.options.keys().size() <= 6
+        && (!('bundle' in item) || (item.bundle is list && item.bundle.size() == 3 && item.bundle[0] is string));
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'email', 'photoURL', 'phone', 'defaultAddress', 'favorites', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoURL', 'phone', 'defaultAddress', 'favorites', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == uid && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() <= 80
+        && data.email is string && data.email.size() <= 120
+        && data.photoURL is string && data.photoURL.size() <= 500
+        && data.phone is string && data.phone.size() <= 24
+        && data.defaultAddress is string && data.defaultAddress.size() <= 240
+        && data.favorites is list && data.favorites.size() <= 50
+        && (data.favorites.size() == 0 || (data.favorites[0] is string && data.favorites[0].size() <= 40))
+        && data.updatedAt is string && data.updatedAt.size() >= 10 && data.updatedAt.size() <= 40;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+          'id', 'source', 'mode', 'status', 'timestamp', 'createdAt',
+          'total', 'totals', 'items', 'customer', 'codes', 'rewards'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'source', 'mode', 'status', 'timestamp', 'createdAt',
+          'scheduledDeliveryTime', 'paymentMethod', 'deliveryCoords', 'kitchenNote',
+          'total', 'totals', 'items', 'customer', 'codes', 'rewards', 'statusUpdatedAt'
+        ])
+        && data.id is string && data.id.size() >= 4 && data.id.size() <= 80 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && (!('userId' in data) || (data.userId is string && isValidId(data.userId)))
+        && data.source == 'website'
+        && data.mode in ['delivery', 'pickup', 'reservation']
+        && data.status in ['received', 'preparing', 'on_the_way', 'delivered', 'declined', 'pending', 'accepted', 'ready', 'out_for_delivery', 'cancelled']
+        && data.timestamp is timestamp
+        && data.createdAt is string && data.createdAt.size() >= 10 && data.createdAt.size() <= 40
+        && (!('scheduledDeliveryTime' in data) || (data.scheduledDeliveryTime is string && data.scheduledDeliveryTime.size() >= 4 && data.scheduledDeliveryTime.size() <= 40))
+        && (!('paymentMethod' in data) || data.paymentMethod in ['cash', 'terminal', 'click', 'payme'])
+        && (!('deliveryCoords' in data) || isValidDeliveryCoords(data.deliveryCoords))
+        && (!('kitchenNote' in data) || (data.kitchenNote is string && data.kitchenNote.size() <= 160))
+        && data.total is number && data.total >= 0 && data.total <= 1000000000
+        && isValidTotals(data.totals)
+        && data.total == data.totals.total
+        && data.items is list && data.items.size() <= 40
+        && (data.mode == 'reservation' || data.items.size() > 0)
+        && (data.items.size() == 0 || isValidOrderItem(data.items[0]))
+        && isValidCustomer(data.customer)
+        && data.codes is list && data.codes.size() <= 3
+        && (data.codes.size() == 0 || (data.codes[0] is string && data.codes[0].size() <= 20))
+        && isValidRewards(data.rewards)
+        && (!('statusUpdatedAt' in data) || data.statusUpdatedAt is timestamp);
+    }
+
+    function isNonTerminalOrderStatus() {
+      return existing().status != 'delivered' && existing().status != 'declined' && existing().status != 'cancelled';
+    }
+
+    // Orders collection: storefront order creation with strict blueprint validation; owner or capability-ID get; admin or owner-scoped list.
+    match /orders/{orderId} {
+      allow get: if isAdmin()
+        || (isSignedIn() && existing().userId == request.auth.uid)
+        || (isValidId(orderId) && orderId.size() >= 20);
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().id == orderId
+        && incoming().status == 'received'
+        && incoming().timestamp == request.time
+        && !('statusUpdatedAt' in incoming())
+        && !('kitchenNote' in incoming())
+        && (!('userId' in incoming()) || (isSignedIn() && incoming().userId == request.auth.uid));
+
+      allow update: if isSignedIn()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && isAdmin()
+        && (isNonTerminalOrderStatus() || isAdmin())
+        && incoming().id == existing().id
+        && incoming().timestamp == existing().timestamp
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'statusUpdatedAt', 'kitchenNote'])
+        && incoming().statusUpdatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    // Signed-in customer profiles: strictly private per user (PII isolated to owner only).
+    match /users/{uid} {
+      allow get: if isValidId(uid) && isOwner(uid);
+      allow list: if false;
+      allow create: if isValidId(uid) && isOwner(uid) && isValidUserProfile(incoming(), uid);
+      allow update: if isValidId(uid) && isOwner(uid)
+        && isValidUserProfile(incoming(), uid)
+        && incoming().uid == existing().uid;
+      allow delete: if false;
+    }
+
+    // Trusted Admin records: authenticated users may read only their own admin record; no client writes allowed.
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

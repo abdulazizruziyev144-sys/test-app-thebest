@@ -1,0 +1,225 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "A customer food order or table reservation submitted from The Best storefront.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique order identifier (e.g. VR-...).",
+          "minLength": 4,
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Optional Firebase Auth UID of the signed-in customer who placed the order.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["website"],
+          "maxLength": 20,
+          "description": "Order origination channel."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["delivery", "pickup", "reservation"],
+          "maxLength": 20,
+          "description": "Fulfillment mode."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "received",
+            "preparing",
+            "on_the_way",
+            "delivered",
+            "declined"
+          ],
+          "maxLength": 30,
+          "description": "Current fulfillment status (starts at received)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp set on order creation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "Client ISO-8601 creation timestamp for display."
+        },
+        "scheduledDeliveryTime": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40,
+          "description": "Optional customer-selected future delivery or pickup timestamp (YYYY-MM-DDTHH:mm)."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cash", "terminal", "click", "payme"],
+          "maxLength": 20,
+          "description": "Selected Uzbekistan payment method (cash, Uzcard/Humo terminal, Click, or Payme)."
+        },
+        "deliveryCoords": {
+          "type": "object",
+          "description": "Optional map pin coordinates { lat, lng, distanceKm, etaMinutes }."
+        },
+        "kitchenNote": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Optional live update note from kitchen staff visible in customer tracker."
+        },
+        "total": {
+          "type": "number",
+          "description": "Grand total of the order in UZS."
+        },
+        "totals": {
+          "type": "object",
+          "description": "Price breakdown map containing subtotal, discount, delivery, and total."
+        },
+        "items": {
+          "type": "array",
+          "description": "Line items included in the order (max 40)."
+        },
+        "customer": {
+          "type": "object",
+          "description": "Customer contact, delivery address, reservation details, and delivery/dietary notes stored in customer.note."
+        },
+        "codes": {
+          "type": "array",
+          "description": "Applied promotion codes (max 3)."
+        },
+        "rewards": {
+          "type": "object",
+          "description": "Rewards tracking summary { phone, pointsRedeemed, pointsEarned }."
+        },
+        "statusUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp recorded when an admin updates status."
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "mode",
+        "status",
+        "timestamp",
+        "createdAt",
+        "total",
+        "totals",
+        "items",
+        "customer",
+        "codes",
+        "rewards"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Signed-in customer profile, saved delivery details, and favorite menu item IDs.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID matching the document ID."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Customer display name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120,
+          "description": "Customer Google email address."
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Customer avatar URL."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 24,
+          "description": "Saved phone number for quick checkout."
+        },
+        "defaultAddress": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Saved default Bukhara delivery address."
+        },
+        "favorites": {
+          "type": "array",
+          "description": "Saved favorite menu item IDs (max 50)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "Last profile update ISO timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "photoURL",
+        "phone",
+        "defaultAddress",
+        "favorites",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized restaurant administrator account mapped by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120,
+          "description": "Administrator email address."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "maxLength": 20,
+          "description": "Assigned role."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp."
+        }
+      },
+      "required": ["email", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Submitted customer orders and table reservations."
+    },
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private signed-in customer profiles, saved delivery info, and favorites."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Trusted administrator lookup documents."
+    }
+  }
+}
